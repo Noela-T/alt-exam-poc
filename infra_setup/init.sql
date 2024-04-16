@@ -20,7 +20,7 @@ FROM '/data/products.csv' DELIMITER ',' CSV HEADER;
 -- TODO: Provide the DDL statment to create this table ALT_SCHOOL.CUSTOMERS
 CREATE TABLE IF NOT EXISTS ALT_SCHOOL.CUSTOMERS
 (
-    customers_id UUID NOT NULL PRIMARY KEY,
+    customer_id UUID NOT NULL PRIMARY KEY,
     device_id UUID NOT NULL,
     location VARCHAR NOT NULL,
     currency VARCHAR            --changed the datatype from bigint as provided by the ERD because the data in the CSV is of character type.
