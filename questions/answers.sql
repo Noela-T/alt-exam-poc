@@ -1,5 +1,4 @@
 -- Part 2a, Question 1
-
 with successful_orders as (
 	-- creating a CTE which contains only successful checkouts from the events table.
 	-- columns included are customer_id present in both events and orders tables as specified by INNER JOIN, and order_id from orders table
@@ -7,7 +6,6 @@ with successful_orders as (
 	FROM alt_school.events e inner join alt_school.orders o using (customer_id) 
 	WHERE e.event_data ->> 'status' = 'success'
 ) 
-
 -- main query using the successful_orders CTE defined above, the line_items and products tables
 SELECT
 	-- product_id column is of type bigint and not UUID as stated in question description. this was pulled from the item_id in line_items table which is a foreign key from the products table
@@ -20,3 +18,36 @@ FROM successful_orders s inner join alt_school.line_items li using (order_id)
 group by li.item_id
 order by num_times_in_successful_orders desc -- organize query results from most to least ordered items
 limit 1; -- this ensures that the query returns only the most ordered item
+
+-- Part 2a, Question 2
+with spender_details as (
+    -- this CTE gets customer_ids of customers who made a successful checkout, and their event_data when they add or remove from their cart
+	SELECT e.customer_id,
+		cast(e.event_data ->> 'item_id' as integer) as item_id, -- converting item_id from text to interger for the join with the products table in the next CTE
+		cast(e.event_data ->> 'quantity' as integer) as quantity, -- converting quantity from text to interger for multiplication with product price
+		-- this count function is necessary to identify items which have been removed from the cart, items with a count of 2 have been added and then removed. items with a count of 1 have been added but not removed
+		-- the partition by clause is needed to count each item in each unique customer's cart
+		count(e.event_data ->> 'item_id') over (partition by e.event_data ->> 'item_id', e.customer_id) as item_num -- using window function in order to keep specific event data on rows with items that were in the cart during checkout
+	FROM alt_school.events e
+	WHERE e.customer_id  in 
+		(select e.customer_id from alt_school.events e where e.event_data ->> 'status' = 'success') -- using this subquery so as to work only with customers who made a successful checkout
+		and 
+		e.event_data ->> 'event_type' in ('add_to_cart', 'remove_from_cart') -- get only 'add to cart' and 'remove from cart' rows to determine customers items in cart during checkout
+	order by e.customer_id
+),
+-- this CTE calculates the amount spent on each item that was in the cart at checkout
+expenditures_per_customer as (
+	select s.customer_id,
+		(s.quantity * p.price) as amount_per_item
+	from spender_details as s inner join alt_school.products p on s.item_id = p.id
+	where s.item_num = 1 -- ensure that the item is still in the cart at the time of checkout
+	order by s.customer_id	
+)
+-- main query which calculates the total amount spent per customer, it returns the customer_id, location and amount spent, of the top 5 spenders
+select es.customer_id,
+	c.location,
+	sum(es.amount_per_item) as total_spend
+from expenditures_per_customer as es inner join alt_school.customers c using (customer_id)
+group by es.customer_id, c.location
+order by total_spend desc
+limit 5;
